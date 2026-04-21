@@ -23,4 +23,5 @@ wheels/
 venv/
 env/
 *.wav
-/audio_data/
+/data/
+/checkpoints/
