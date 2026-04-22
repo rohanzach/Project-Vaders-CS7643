@@ -12,16 +12,20 @@ def distillation_loss(pred_emb, gt_emb, alpha=0.7):
     return alpha * cosine_loss + (1-alpha) * mse_loss, cosine_loss.item(), mse_loss.item()
 
 def training_loop(model, train_loader, test_loader, device, hyperparams):
-    os.makedirs("checkpoints", exist_ok=True)
-    CHECKPOINT_DIR = "checkpoints"
 
     NUM_EPOCHS = hyperparams.get('num_epochs', 50)
     SAVE_EVERY = hyperparams.get('save_every', 10)
     LR = hyperparams.get('lr', 1e-3)
     WEIGHT_DECAY = hyperparams.get('weight_decay', 1e-4)
+    ALPHA = hyperparams.get('loss_alpha', 0.7)
+    MODEL_NAME = hyperparams.get('model_name', 'BasicSpeakerEncoder')
+    
+
+    os.makedirs(f"checkpoints/{MODEL_NAME}", exist_ok=True)
+    CHECKPOINT_DIR = f"checkpoints/{MODEL_NAME}"
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)
 
     best_test_cosine = 0.0
     history = {'train_loss':[],'train_cosine':[],'test_loss':[],'test_cosine':[]}
@@ -32,7 +36,7 @@ def training_loop(model, train_loader, test_loader, device, hyperparams):
         for mel, gt_emb in train_loader:
             mel, gt_emb = mel.to(device), gt_emb.to(device)
             pred_emb = model(mel)
-            loss, cos_l, mse_l = distillation_loss(pred_emb, gt_emb)
+            loss, cos_l, mse_l = distillation_loss(pred_emb, gt_emb, alpha=ALPHA)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -49,7 +53,7 @@ def training_loop(model, train_loader, test_loader, device, hyperparams):
             for mel, gt_emb in test_loader:
                 mel, gt_emb = mel.to(device), gt_emb.to(device)
                 pred_emb = model(mel)
-                loss, cos_l, _ = distillation_loss(pred_emb, gt_emb)
+                loss, cos_l, _ = distillation_loss(pred_emb, gt_emb, alpha=ALPHA)
                 dev_loss += loss.item()
                 dev_cos += (1.0 - cos_l)
                 dev_n += 1
@@ -71,3 +75,4 @@ def training_loop(model, train_loader, test_loader, device, hyperparams):
     torch.save(model.state_dict(), os.path.join(CHECKPOINT_DIR, 'final.pt'))
     with open(os.path.join(CHECKPOINT_DIR, 'history.json'), 'w') as f: json.dump(history, f)
     print(f'\nDone! Best test cosine similarity: {best_test_cosine:.4f}')
+    return best_test_cosine
