@@ -25,4 +25,4 @@ Bash
 sudo docker run -d -it -v "$(pwd):/workspace" --gpus all vader_env
 
 ## 🧪 Verifying the Installation
-Try running the 1st cell in test.ipynb
+Try running the 1st cell in test_setup.ipynb
