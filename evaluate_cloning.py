@@ -45,7 +45,12 @@ def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, devi
     return error_rate, transcription
 
 def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="checkpoints/BasicSpeakerEncoder_trial_3/best.pt", number_of_speakers=5):
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     
     # 1. Load Evaluation Models
     print("Loading Whisper for WER evaluation...")
