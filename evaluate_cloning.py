@@ -173,4 +173,5 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
-    evaluate_cloning(custom_speaker_encoder=False, model_path="checkpoints/BasicSpeakerEncoder_trial_3/best.pt", number_of_speakers=20)
+    model = BasicSpeakerEncoder()
+    evaluate_cloning(custom_speaker_encoder=True, model=model, model_path="checkpoints/BasicSpeakerEncoder_trial_13/best.pt", number_of_speakers=100)
