@@ -5,7 +5,7 @@ import soundfile as sf
 from jiwer import wer
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from qwen_tts import Qwen3TTSModel
-from qwen_tts.core.models import BasicSpeakerEncoder
+from qwen_tts.core.models import BasicSpeakerEncoder, TDNNSpeakerEncoder
 import numpy as np
 import os
 import random
@@ -44,7 +44,7 @@ def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, devi
     error_rate = wer(clean_target, clean_transcription)
     return error_rate, transcription
 
-def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="checkpoints/BasicSpeakerEncoder_trial_3/best.pt", number_of_speakers=5):
+def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="BasicSpeakerEncoder", model_path="checkpoints/BasicSpeakerEncoder_trial_3/best.pt", number_of_speakers=5):
     if torch.cuda.is_available():
         device = torch.device("cuda")
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -131,9 +131,9 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
             gen_audio = wavs[0]
 
             # Save generated audio for inspection
-            os.makedirs(f"./data/generated_samples_custom_{custom_speaker_encoder}", exist_ok=True)
-            sf.write(f"./data/generated_samples_custom_{custom_speaker_encoder}/{speaker}_{os.path.basename(target_audio_path)}", gen_audio, sr)
-            print(f"✅ Success! Audio saved as generated_samples_custom_{custom_speaker_encoder}/{speaker}_{os.path.basename(target_audio_path)}")
+            os.makedirs(f"./data/generated_samples_custom_model_name_{model_name}", exist_ok=True)
+            sf.write(f"./data/generated_samples_custom_model_name_{model_name}/{speaker}_{os.path.basename(target_audio_path)}", gen_audio, sr)
+            print(f"✅ Success! Audio saved as generated_samples_custom_model_name_{model_name}/{speaker}_{os.path.basename(target_audio_path)}")
 
             # 5. Evaluate Speaker Cosine Similarity
             tgt_wav, orig_sr = torchaudio.load(target_audio_path)
@@ -178,5 +178,5 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
-    model = BasicSpeakerEncoder()
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_path="checkpoints/BasicSpeakerEncoder_trial_13/best.pt", number_of_speakers=100)
+    model = TDNNSpeakerEncoder()
+    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=10)
