@@ -77,17 +77,14 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
     data_dir = "./data/LibriSpeech/test-clean"
     speakers = [d for d in sorted(os.listdir(data_dir)) if os.path.isdir(os.path.join(data_dir, d))]
     
-    # Limit to a few random speakers to save time
-    num_speakers = min(number_of_speakers, len(speakers))
-    speakers = random.sample(speakers, num_speakers)
-    
     total_wer = 0.0
     total_sim = 0.0
     eval_count = 0
     
     elapsed_time = 0
     start_time = time.time()
-    for speaker in speakers:
+    while eval_count < number_of_speakers:
+        speaker = random.choice(speakers)
         speaker_dir = os.path.join(data_dir, speaker)
         utterances = []
         
@@ -110,6 +107,9 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
         if len(utterances) >= 2:
             # Randomly select a reference utterance and a target utterance
             ref_utt, target_utt = random.sample(utterances, 2)
+
+            if len(ref_utt["text"].split()) < 10 or len(target_utt["text"].split()) < 10:
+                continue  # Skip very short utterances
             
             target_text = target_utt["text"]
             target_audio_path = target_utt["audio"]
@@ -129,7 +129,12 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_path="check
                 ref_text=ref_text
             )
             gen_audio = wavs[0]
-            
+
+            # Save generated audio for inspection
+            os.makedirs(f"./data/generated_samples_custom_{custom_speaker_encoder}", exist_ok=True)
+            sf.write(f"./data/generated_samples_custom_{custom_speaker_encoder}/{speaker}_{os.path.basename(target_audio_path)}", gen_audio, sr)
+            print(f"✅ Success! Audio saved as generated_samples_custom_{custom_speaker_encoder}/{speaker}_{os.path.basename(target_audio_path)}")
+
             # 5. Evaluate Speaker Cosine Similarity
             tgt_wav, orig_sr = torchaudio.load(target_audio_path)
             if orig_sr != 24000:
