@@ -5,7 +5,7 @@ import soundfile as sf
 from jiwer import wer
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from qwen_tts import Qwen3TTSModel
-from qwen_tts.core.models import BasicSpeakerEncoder, TDNNSpeakerEncoder
+from qwen_tts.core.models import BasicSpeakerEncoder, TDNNSpeakerEncoder, ConvEncoder
 import numpy as np
 import os
 import random
@@ -178,5 +178,5 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
-    model = TDNNSpeakerEncoder()
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=10)
+    model = ConvEncoder()
+    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="ConvEncoder", model_path="final_weights/ConvEncoder/best.pt", number_of_speakers=100)
