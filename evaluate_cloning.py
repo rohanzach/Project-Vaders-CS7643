@@ -12,6 +12,7 @@ import random
 import re
 import string
 import time
+from torchview import draw_graph
 
 
 def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, device="cuda:0"):
@@ -72,6 +73,13 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
         custom_encoder.load_state_dict(torch.load(model_path, map_location=device))
         custom_encoder.to(tts.device).to(tts.model.dtype).eval()
         tts.model.speaker_encoder = custom_encoder
+
+        # Create a diagram of the custom speaker encoder architecture for the report
+        os.makedirs(f"./data/custom_model_diagram/{model_name}", exist_ok=True)
+        dummy_input = torch.randn((1, 400, 128), dtype=tts.model.dtype, device=tts.device)
+        # Update the depth based on how complex the model is
+        model_graph = draw_graph(custom_encoder, input_data=dummy_input, depth=1)
+        model_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/{model_name}/model_architecture", cleanup=True)
     
     # 3. Evaluate across a subset of test-clean
     data_dir = "./data/LibriSpeech/test-clean"
@@ -178,5 +186,8 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
+    # model = BasicSpeakerEncoder()
+    # evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="BasicSpeakerEncoder", model_path="final_weights/BasicSpeakerEncoder/best.pt", number_of_speakers=10)
+
     model = TDNNSpeakerEncoder()
     evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=10)

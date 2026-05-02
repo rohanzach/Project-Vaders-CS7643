@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     espeak-ng \
     libespeak-ng-dev \
     git \
+    graphviz \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,7 +24,7 @@ RUN pip install --no-cache-dir torch torchvision torchaudio \
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
-RUN pip install --no-cache-dir psutil packaging ninja optuna jiwer
+RUN pip install --no-cache-dir psutil packaging ninja optuna jiwer torchview
 
 RUN pip install --no-cache-dir flash-attn --no-build-isolation && \
 	pip install --no-cache-dir -e .
