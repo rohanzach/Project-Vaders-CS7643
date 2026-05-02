@@ -25,3 +25,17 @@ env/
 *.wav
 /data/
 /checkpoints/
+
+# OS / editor noise
+.DS_Store
+**/.DS_Store
+
+# Claude Code worktrees / agent scratch
+.claude/
+
+# Trial run outputs (keep curated weights under final_weights/)
+TDNNSpeakerEncoder_trial_*/
+BasicSpeakerEncoder_trial_*/
+LightweightECAPATDNN_trial_*/
+venv312/
+.gitignore

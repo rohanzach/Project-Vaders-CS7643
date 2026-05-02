@@ -115,11 +115,21 @@ def get_train_test_loaders():
         print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
     print("Loading Qwen3-TTS model...")
-    qwen3_model = Qwen3TTSModel.from_pretrained("Qwen/Qwen3-TTS-12Hz-1.7B-Base", device_map="cuda:0" if device.type == "cuda" else "cpu", dtype=torch.bfloat16 if device.type == "cuda" else torch.float32)
+    # Load on CPU first; we'll move just the speaker encoder to the target device.
+    # The full Qwen3-TTS model isn't fully MPS-friendly (bf16 + some ops), but the
+    # speaker encoder is a small ECAPA net that runs cleanly on MPS in fp32.
+    load_device_map = "cuda:0" if device.type == "cuda" else "cpu"
+    load_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+    qwen3_model = Qwen3TTSModel.from_pretrained(
+        "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        device_map=load_device_map,
+        dtype=load_dtype,
+    )
     qwen3_encoder = qwen3_model.model.speaker_encoder.eval()
-    print(f"Qwen3 speaker encoder loaded on {device}")
+    if device.type == "mps":
+        qwen3_encoder = qwen3_encoder.to(device).float()
+    print(f"Qwen3 speaker encoder loaded on {next(qwen3_encoder.parameters()).device}")
 
-    # Generate/Load the embedding split files
     train_emb_file, train_meta_file = extract_embeddings_for_split(DATA_DIR, EMBEDDINGS_DIR, "train-clean-100", qwen3_encoder, device)
     dev_emb_file, dev_meta_file = extract_embeddings_for_split(DATA_DIR, EMBEDDINGS_DIR, "dev-clean", qwen3_encoder, device)
 

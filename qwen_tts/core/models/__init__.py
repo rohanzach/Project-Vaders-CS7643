@@ -16,6 +16,10 @@
 from .configuration_qwen3_tts import Qwen3TTSConfig
 from .modeling_qwen3_tts import Qwen3TTSForConditionalGeneration
 from .processing_qwen3_tts import Qwen3TTSProcessor
-from .speaker_embedding import BasicSpeakerEncoder
+from .speaker_embedding import (
+    BasicSpeakerEncoder,
+    LightweightECAPATDNN,
+    VaderSpeakerEncoder,
+)
 from .Custom_ECAPA_TDNN import TDNNSpeakerEncoder
 from .Custom_Conv_GLUB import ConvEncoder
