@@ -84,7 +84,14 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
         dummy_input = torch.randn((1, 400, 128), dtype=tts.model.dtype, device=tts.device)
         # Update the depth based on how complex the model is
         model_graph = draw_graph(custom_encoder, input_data=dummy_input, depth=1)
-        model_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/{model_name}/model_architecture", cleanup=True)
+        model_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/{model_name}/{model_name}_architecture", cleanup=True)
+
+    # Save base model diagram for reference
+    os.makedirs(f"./data/custom_model_diagram/Qwen3_Original_SpeakerEncoder", exist_ok=True)
+    dummy_input = torch.randn((1, 400, 128), dtype=tts.model.dtype, device=tts.device)
+    base_graph = draw_graph(tts.model.speaker_encoder, input_data=dummy_input, depth=1)
+    base_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/Qwen3_Original_SpeakerEncoder/Qwen3_Original_SpeakerEncoder_architecture", cleanup=True)
+    
     
     # 3. Evaluate across a subset of test-clean
     data_dir = "./data/LibriSpeech/test-clean"
@@ -191,16 +198,28 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
+    # Baseline with Qwen3's original speaker encoder
+    print("Evaluating baseline with Qwen3's original speaker encoder...")
+    evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Qwen3_Original_SpeakerEncoder", model_path=None, number_of_speakers=10)
+
+    # Basic Speaker Encoder
+    model = BasicSpeakerEncoder()
+    print("Evaluating Basic Speaker Encoder...")
+    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="BasicSpeakerEncoder", model_path="final_weights/BasicSpeakerEncoder/best.pt", number_of_speakers=10)
+
     # Song's ConvEncoder
     model = ConvEncoder()
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="ConvEncoder", model_path="final_weights/ConvEncoder/best.pt", number_of_speakers=100)
+    print("Evaluating Conv Encoder...")
+    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="ConvEncoder", model_path="final_weights/ConvEncoder/best.pt", number_of_speakers=10)
 
     # Rohan's verified ECAPA-TDNN encoder
     model = TDNNSpeakerEncoder()
+    print("Evaluating TDNN Speaker Encoder...")
     evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=10)
 
     # Aditya's lightweight ECAPA-TDNN
     model = LightweightECAPATDNN(enc_dim=2048)
+    print("Evaluating Lightweight ECAPA-TDNN...")
     evaluate_cloning(
         custom_speaker_encoder=True,
         model=model,
