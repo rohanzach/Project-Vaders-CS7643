@@ -18,9 +18,19 @@ import re
 import string
 import time
 from torchview import draw_graph
+from torchinfo import summary
 
 
-def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, device="cuda:0"):
+def fit_audio_length(audio_array, target_num_samples):
+    if len(audio_array) > target_num_samples:
+        return audio_array[:target_num_samples]
+    if len(audio_array) < target_num_samples:
+        pad_width = target_num_samples - len(audio_array)
+        return np.pad(audio_array, (0, pad_width))
+    return audio_array
+
+
+def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, device="cuda:0", max_words=None):
     # Whisper expects 16kHz audio
     if sr != 16000:
         audio_tensor = torch.tensor(audio_array).unsqueeze(0).float()
@@ -42,6 +52,10 @@ def calculate_wer(audio_array, target_text, processor, asr_model, sr=24000, devi
         )
     transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
     
+    if max_words is not None:
+        transcription_words = transcription.split()
+        transcription = " ".join(transcription_words[:max_words])
+
     # Clean punctuation for a fairer WER calculation
     clean_target = re.sub(f"[{re.escape(string.punctuation)}]", "", target_text.lower())
     clean_transcription = re.sub(f"[{re.escape(string.punctuation)}]", "", transcription.lower())
@@ -85,12 +99,14 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
         # Update the depth based on how complex the model is
         model_graph = draw_graph(custom_encoder, input_data=dummy_input, depth=1)
         model_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/{model_name}/{model_name}_architecture", cleanup=True)
+        summary(custom_encoder, input_data=dummy_input)
 
     # Save base model diagram for reference
     os.makedirs(f"./data/custom_model_diagram/Qwen3_Original_SpeakerEncoder", exist_ok=True)
     dummy_input = torch.randn((1, 400, 128), dtype=tts.model.dtype, device=tts.device)
     base_graph = draw_graph(tts.model.speaker_encoder, input_data=dummy_input, depth=1)
     base_graph.visual_graph.render(format='pdf', filename=f"./data/custom_model_diagram/Qwen3_Original_SpeakerEncoder/Qwen3_Original_SpeakerEncoder_architecture", cleanup=True)
+    summary(tts.model.speaker_encoder, input_data=dummy_input)
     
     
     # 3. Evaluate across a subset of test-clean
@@ -140,6 +156,11 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
             print(f"Ref Audio  : {ref_audio}")
             print(f"Target Text: {target_text}")
             
+            tgt_wav, orig_sr = torchaudio.load(target_audio_path)
+            if orig_sr != 24000:
+                tgt_wav = torchaudio.functional.resample(tgt_wav, orig_sr, 24000)
+            tgt_audio_array = tgt_wav.mean(dim=0).numpy()
+
             # 4. Generate Audio
             print("Generating Cloned Audio...")
             wavs, sr = tts.generate_voice_clone(
@@ -150,17 +171,15 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
             )
             gen_audio = wavs[0]
 
+            target_num_samples = int(round(len(tgt_audio_array) * sr / 24000))
+            gen_audio = fit_audio_length(gen_audio, target_num_samples)
+
             # Save generated audio for inspection
             os.makedirs(f"./data/generated_samples_custom_model_name_{model_name}", exist_ok=True)
             sf.write(f"./data/generated_samples_custom_model_name_{model_name}/{speaker}_{os.path.basename(target_audio_path)}", gen_audio, sr)
             print(f"✅ Success! Audio saved as generated_samples_custom_model_name_{model_name}/{speaker}_{os.path.basename(target_audio_path)}")
 
             # 5. Evaluate Speaker Cosine Similarity
-            tgt_wav, orig_sr = torchaudio.load(target_audio_path)
-            if orig_sr != 24000:
-                tgt_wav = torchaudio.functional.resample(tgt_wav, orig_sr, 24000)
-            tgt_audio_array = tgt_wav.mean(dim=0).numpy()
-            
             # If we are using a custom speaker encoder, we should evaluate using the Qwen3 speaker encoder
             if custom_speaker_encoder:
                 # Temporarily swap back to the base encoder to measure cosine similarity
@@ -176,7 +195,15 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
             cos_sim = F.cosine_similarity(emb_gen.unsqueeze(0), emb_tgt.unsqueeze(0)).item()
             
             # 6. Evaluate WER
-            wer_score, transcript = calculate_wer(gen_audio, target_text, processor, asr_model, sr=sr, device=device)
+            wer_score, transcript = calculate_wer(
+                gen_audio,
+                target_text,
+                processor,
+                asr_model,
+                sr=sr,
+                device=device,
+                max_words=len(target_text.split()),
+            )
             
             print(f"Transcription: {transcript.strip()}")
             print(f"WER (Words)  : {wer_score * 100:.2f}%")
@@ -198,24 +225,24 @@ def evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Basic
     return total_wer, total_sim, eval_count
 
 if __name__ == "__main__":
-    # Baseline with Qwen3's original speaker encoder
-    print("Evaluating baseline with Qwen3's original speaker encoder...")
-    evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Qwen3_Original_SpeakerEncoder", model_path=None, number_of_speakers=10)
+    # # Baseline with Qwen3's original speaker encoder
+    # print("Evaluating baseline with Qwen3's original speaker encoder...")
+    # evaluate_cloning(custom_speaker_encoder=False, model=None, model_name="Qwen3_Original_SpeakerEncoder", model_path=None, number_of_speakers=1)
 
-    # Basic Speaker Encoder
-    model = BasicSpeakerEncoder()
-    print("Evaluating Basic Speaker Encoder...")
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="BasicSpeakerEncoder", model_path="final_weights/BasicSpeakerEncoder/best.pt", number_of_speakers=10)
+    # # Basic Speaker Encoder
+    # model = BasicSpeakerEncoder()
+    # print("Evaluating Basic Speaker Encoder...")
+    # evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="BasicSpeakerEncoder", model_path="final_weights/BasicSpeakerEncoder/best.pt", number_of_speakers=1)
 
-    # Song's ConvEncoder
-    model = ConvEncoder()
-    print("Evaluating Conv Encoder...")
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="ConvEncoder", model_path="final_weights/ConvEncoder/best.pt", number_of_speakers=10)
+    # # Song's ConvEncoder
+    # model = ConvEncoder()
+    # print("Evaluating Conv Encoder...")
+    # evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="ConvEncoder", model_path="final_weights/ConvEncoder/best.pt", number_of_speakers=1)
 
-    # Rohan's verified ECAPA-TDNN encoder
-    model = TDNNSpeakerEncoder()
-    print("Evaluating TDNN Speaker Encoder...")
-    evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=10)
+    # # Rohan's verified ECAPA-TDNN encoder
+    # model = TDNNSpeakerEncoder()
+    # print("Evaluating TDNN Speaker Encoder...")
+    # evaluate_cloning(custom_speaker_encoder=True, model=model, model_name="TDNNSpeakerEncoder", model_path="final_weights/TDNNSpeakerEncoder/best.pt", number_of_speakers=1)
 
     # Aditya's lightweight ECAPA-TDNN
     model = LightweightECAPATDNN(enc_dim=2048)
@@ -225,5 +252,5 @@ if __name__ == "__main__":
         model=model,
         model_name="LightweightECAPA_TDNNSpeakerEncoder",
         model_path="final_weights/LightweightECAPA_TDNNSpeakerEncoder/best.pt",
-        number_of_speakers=10,
+        number_of_speakers=100,
     )
